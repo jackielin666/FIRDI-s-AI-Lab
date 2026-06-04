@@ -1,0 +1,1448 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>供應商進貨品質評分系統 POC</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- SheetJS -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            navy: {
+              900: '#0F172A',
+              800: '#1E293B',
+              700: '#334155',
+              600: '#475569',
+              500: '#64748B'
+            },
+            corporate: {
+              dark: '#0B192C',
+              blue: '#1E3E62',
+              light: '#000000',
+              accent: '#F1F6F9'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700;900&display=swap');
+    body {
+      font-family: 'Noto Sans TC', sans-serif;
+      background-color: #0F172A;
+      color: #E2E8F0;
+    }
+    .custom-shadow {
+      box-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.3);
+    }
+    /* Print optimization */
+    @media print {
+      body {
+        background: white !important;
+        color: black !important;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .print-layout {
+        display: block !important;
+        width: 100% !important;
+      }
+      .card-print {
+        border: 1px solid #CBD5E1 !important;
+        box-shadow: none !important;
+        background: white !important;
+        color: black !important;
+        page-break-inside: avoid;
+      }
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+  <!-- Top Professional Header -->
+  <header class="bg-slate-900 border-b border-slate-800 py-5 px-6 custom-shadow no-print">
+    <div class="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center space-x-4">
+        <div class="p-2.5 bg-blue-600 rounded-lg text-white shadow-lg shadow-blue-500/20">
+          <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-2xl font-black tracking-wider text-white">食品工廠品質主管晨會 Dashboard</h1>
+          <p class="text-xs text-slate-400 mt-1">供應商進貨品質評分系統 (Supplier Inward Quality Rating System POC)</p>
+        </div>
+      </div>
+      <div class="text-right">
+        <div class="text-sm text-slate-400">資料處理狀態</div>
+        <div id="globalStatusTag" class="text-sm font-semibold text-amber-500 mt-1 flex items-center justify-end gap-1">
+          <span class="w-2 h-2 rounded-full bg-amber-500 inline-block animate-pulse"></span>
+          等待上傳Excel資料檔案
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="flex-grow max-w-7xl w-full mx-auto px-4 py-8 space-y-8 print-layout">
+
+    <!-- SECTION: File Upload Area -->
+    <section class="no-print">
+      <div id="dropzone" class="border-2 border-dashed border-slate-700 hover:border-blue-500 rounded-xl bg-slate-900/60 p-8 text-center cursor-pointer transition-all duration-300 relative overflow-hidden group">
+        <input type="file" id="fileInput" class="hidden" accept=".xlsx, .xls" />
+        
+        <!-- Normal Upload View -->
+        <div id="uploadPromptView" class="space-y-4">
+          <div class="mx-auto w-16 h-16 bg-slate-800 rounded-full flex items-center justify-center text-slate-400 group-hover:text-blue-500 group-hover:bg-slate-800/80 transition-colors">
+            <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+            </svg>
+          </div>
+          <div>
+            <p class="text-lg font-semibold text-slate-200">請上傳供應商進貨品質資料Excel</p>
+            <p class="text-xs text-slate-500 mt-1">僅支援格式: <span class="text-blue-400 font-mono font-semibold">.xlsx</span>, <span class="text-blue-400 font-mono font-semibold">.xls</span></p>
+          </div>
+        </div>
+
+        <!-- Error Upload View (🚫) -->
+        <div id="uploadErrorView" class="hidden space-y-4">
+          <div class="mx-auto w-16 h-16 bg-red-950/40 text-red-500 rounded-full flex items-center justify-center text-4xl font-black">
+            🚫
+          </div>
+          <div>
+            <h3 class="text-red-500 text-lg font-bold">檔案格式錯誤</h3>
+            <p class="text-sm text-slate-300 mt-1">本系統僅允許上傳Excel檔案</p>
+            <p class="text-xs text-slate-500 mt-2">支援格式：.xlsx / .xls，請重新上傳正確檔案</p>
+          </div>
+        </div>
+
+        <!-- Validation Error View -->
+        <div id="validationErrorView" class="hidden space-y-4">
+          <div class="mx-auto w-16 h-16 bg-red-950/40 text-red-500 rounded-full flex items-center justify-center text-4xl font-black">
+            🚫
+          </div>
+          <div>
+            <h3 class="text-red-500 text-lg font-bold">Excel格式錯誤</h3>
+            <p class="text-sm text-slate-300 mt-1" id="validationErrorMessage">缺少必要欄位</p>
+            <p class="text-xs text-slate-500 mt-2">請重新上傳符合規格的Excel檔案</p>
+          </div>
+        </div>
+
+        <!-- Validation Success View (✅) -->
+        <div id="uploadSuccessView" class="hidden space-y-4">
+          <div class="mx-auto w-16 h-16 bg-emerald-950/40 text-emerald-500 rounded-full flex items-center justify-center text-4xl font-black">
+            ✓
+          </div>
+          <div>
+            <h3 class="text-emerald-500 text-lg font-bold">✅資料已成功載入</h3>
+            <div class="text-xs text-slate-400 mt-2 inline-block bg-slate-850 p-3 rounded border border-slate-800 text-left">
+              <p class="font-semibold text-slate-300 mb-1">已驗證欄位：</p>
+              <p class="text-emerald-400">✓供應商 &nbsp; ✓食材 &nbsp; ✓進貨次數 &nbsp; ✓退貨次數 &nbsp; ✓異常類型/異常次數</p>
+              <p class="text-slate-400 text-[10px] mt-1 text-center">欄位驗證通過</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION: Data Quality Warning Alert Panel (Hidden by default) -->
+    <section id="qualityAlertSection" class="hidden bg-red-950/20 border border-red-800/60 rounded-xl p-6 custom-shadow">
+      <div class="flex items-start space-x-4">
+        <div class="text-3xl text-red-500">⚠️</div>
+        <div class="flex-1 space-y-3">
+          <div>
+            <h3 class="text-lg font-bold text-red-400">資料品質檢查警示</h3>
+            <p class="text-sm text-slate-300 mt-1">系統於讀取資料時，發現品質異常資料，異常資料共計 <span id="qualityErrorCount" class="text-red-400 font-bold underline">0</span> 筆。</p>
+          </div>
+          
+          <div class="bg-slate-900/80 rounded border border-red-950 p-4 max-h-48 overflow-y-auto">
+            <p class="text-xs font-bold text-red-400 mb-2">異常明細：</p>
+            <ul id="qualityErrorList" class="text-xs text-slate-300 space-y-1.5 list-disc list-inside">
+              <!-- Quality issue items will be appended here -->
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Empty State Placeholder (Visible when no data is loaded) -->
+    <section id="dashboardPlaceholder" class="text-center py-20 bg-slate-900/30 border border-slate-800 rounded-xl">
+      <div class="max-w-md mx-auto space-y-4">
+        <div class="text-slate-600 text-6xl">📊</div>
+        <h3 class="text-xl font-bold text-slate-400">等待載入進貨品質資料</h3>
+        <p class="text-sm text-slate-500">請於上方拖曳或選取您今日早會欲進行報告分析的 Excel 檔案。系統將會即時分析並更新下方企業 Dashboard。</p>
+      </div>
+    </section>
+
+    <!-- MAIN ANALYTICS DASHBOARD CONTAINER (Hidden by default) -->
+    <div id="analysisDashboard" class="hidden space-y-8">
+
+      <!-- SECTION: KPI SUMMARY -->
+      <section class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <!-- KPI 1 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">供應商總數</div>
+          <div id="kpi_suppliers_count" class="text-2xl md:text-3xl font-black text-blue-400 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">家</div>
+        </div>
+        <!-- KPI 2 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">原始資料筆數</div>
+          <div id="kpi_raw_records" class="text-2xl md:text-3xl font-black text-blue-400 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">筆進貨記錄</div>
+        </div>
+        <!-- KPI 3 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">總進貨次數</div>
+          <div id="kpi_total_shipments" class="text-2xl md:text-3xl font-black text-blue-400 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">次</div>
+        </div>
+        <!-- KPI 4 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">總退貨次數</div>
+          <div id="kpi_total_returns" class="text-2xl md:text-3xl font-black text-blue-400 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">次</div>
+        </div>
+        <!-- KPI 5 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">平均退貨率</div>
+          <div id="kpi_avg_return_rate" class="text-2xl md:text-3xl font-black text-blue-400 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">%</div>
+        </div>
+        <!-- KPI 6 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">平均品質分數</div>
+          <div id="kpi_avg_quality_score" class="text-2xl md:text-3xl font-black text-emerald-400 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">分</div>
+        </div>
+        <!-- KPI 7 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">高風險供應商</div>
+          <div id="kpi_high_risk_count" class="text-2xl md:text-3xl font-black text-red-400 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">家 (分數 &lt; 80)</div>
+        </div>
+        <!-- KPI 8 -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-5 custom-shadow card-print hover:border-blue-600/40 transition-colors">
+          <div class="text-xs text-slate-400 font-medium">異常事件總數</div>
+          <div id="kpi_anomaly_events_count" class="text-2xl md:text-3xl font-black text-amber-500 mt-2">-</div>
+          <div class="text-[10px] text-slate-500 mt-1">件紀錄</div>
+        </div>
+      </section>
+
+      <!-- SECTION: CHARTS BLOCK -->
+      <section class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Left: Supplier Ranking Chart Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 custom-shadow card-print">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 no-print">
+            <h3 class="text-base font-bold text-slate-100 flex items-center gap-1.5">
+              <span class="w-3 h-3 bg-blue-500 rounded-full inline-block"></span>
+              供應商綜合品質指標排名
+            </h3>
+            <select id="rankingMetricSelect" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-1.5 focus:outline-none focus:border-blue-500">
+              <option value="score">品質分數排名 (由高到低)</option>
+              <option value="returnRate">退貨率排名 (由高到低)</option>
+              <option value="returns">總退貨次數排名 (由高到低)</option>
+              <option value="anomalyCount">異常次數排名 (由高到低)</option>
+              <option value="shipments">總進貨次數排名 (由高到低)</option>
+            </select>
+          </div>
+          <!-- Printable title -->
+          <h3 id="rankingPrintTitle" class="hidden text-lg font-bold text-slate-800 mb-2">供應商綜合指標排名</h3>
+          <div class="relative w-full h-80">
+            <canvas id="rankingChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Right: Anomaly Type Distribution Chart Card -->
+        <div class="bg-slate-900 border border-slate-800 rounded-xl p-6 custom-shadow card-print">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4 no-print">
+            <h3 class="text-base font-bold text-slate-100 flex items-center gap-1.5">
+              <span class="w-3 h-3 bg-amber-500 rounded-full inline-block"></span>
+              進貨品質異常類型分析
+            </h3>
+            <select id="anomalySupplierSelect" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-1.5 focus:outline-none focus:border-blue-500 max-w-[200px]">
+              <option value="ALL">全部供應商</option>
+            </select>
+          </div>
+          <!-- Printable title -->
+          <h3 id="anomalyPrintTitle" class="hidden text-lg font-bold text-slate-800 mb-2">進貨品質異常類型分佈</h3>
+          <div class="relative w-full h-80 flex justify-center">
+            <canvas id="anomalyChart"></canvas>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: MAIN TABLE AND AI PANEL -->
+      <section class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Left Table Block (9 cols) -->
+        <div class="lg:col-span-9 bg-slate-900 border border-slate-800 rounded-xl p-6 custom-shadow card-print overflow-hidden">
+          <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 no-print">
+            <h3 class="text-base font-bold text-slate-100">供應商進貨品質彙總分析表</h3>
+            <div class="flex flex-wrap items-center gap-3 w-full sm:w-auto">
+              <!-- Search input -->
+              <input type="text" id="tableSearchInput" placeholder="搜尋供應商..." class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-blue-500 w-full sm:w-40">
+              <!-- Risk Filter -->
+              <select id="tableRiskFilter" class="bg-slate-800 border border-slate-700 text-slate-200 text-xs rounded px-3 py-2 focus:outline-none focus:border-blue-500">
+                <option value="ALL">所有風險等級</option>
+                <option value="優良">🟢 優良 (90分以上)</option>
+                <option value="觀察">🟡 觀察 (80-89分)</option>
+                <option value="高風險">🔴 高風險 (80分以下)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Table Wrapper -->
+          <div class="overflow-x-auto">
+            <table class="min-w-full text-sm text-left">
+              <thead class="bg-slate-800/80 text-slate-300 font-bold uppercase text-xs tracking-wider border-b border-slate-700">
+                <tr>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700" onclick="sortTableByField('rank')">排名 ⇅</th>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700" onclick="sortTableByField('riskLevel')">風險燈號 ⇅</th>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700" onclick="sortTableByField('name')">供應商 ⇅</th>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700" onclick="sortTableByField('shipments')">總進貨次數 ⇅</th>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700" onclick="sortTableByField('returns')">總退貨次數 ⇅</th>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700" onclick="sortTableByField('returnRate')">退貨率(%) ⇅</th>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700" onclick="sortTableByField('anomalyCount')">異常次數 ⇅</th>
+                  <th class="py-3 px-4">主要異常類型</th>
+                  <th class="py-3 px-4 cursor-pointer hover:bg-slate-700 text-right" onclick="sortTableByField('score')">品質分數 ⇅</th>
+                  <th class="py-3 px-4 no-print">管理建議</th>
+                </tr>
+              </thead>
+              <tbody id="supplierTableBody" class="divide-y divide-slate-800 text-slate-300">
+                <!-- Populated dynamically via JS -->
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Pagination Component (No-print) -->
+          <div class="flex items-center justify-between mt-5 pt-4 border-t border-slate-800 no-print">
+            <div class="text-xs text-slate-400">
+              顯示第 <span id="paginationStartIdx">0</span> 至 <span id="paginationEndIdx">0</span> 家，共 <span id="paginationTotalCount">0</span> 家供應商
+            </div>
+            <div class="flex space-x-1">
+              <button id="btnPrevPage" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 text-xs rounded disabled:opacity-50" onclick="prevTablePage()">
+                上一頁
+              </button>
+              <button id="btnNextPage" class="bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-1 text-xs rounded disabled:opacity-50" onclick="nextTablePage()">
+                下一頁
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right AI Panel Block (3 cols) -->
+        <div class="lg:col-span-3 bg-slate-900 border border-slate-800 rounded-xl p-6 custom-shadow card-print flex flex-col justify-between">
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <div class="p-1.5 bg-blue-500/10 text-blue-400 rounded-md">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"></path>
+                </svg>
+              </div>
+              <h3 class="text-base font-bold text-slate-100">AI 進貨品質智慧分析</h3>
+            </div>
+            
+            <div class="space-y-4 text-xs bg-slate-950/50 rounded-lg p-4 border border-slate-800">
+              <div>
+                <p class="text-slate-500 uppercase tracking-wider font-bold">【AI分析結果】</p>
+              </div>
+              <div class="space-y-2.5">
+                <div>
+                  <span class="text-slate-400 font-semibold block">品質風險最高：</span>
+                  <span id="aiHighestRiskSupplier" class="text-red-400 font-bold text-sm">計算中...</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 font-semibold block">退貨率最高：</span>
+                  <span id="aiHighestReturnRateSupplier" class="text-amber-400 font-bold text-sm">計算中...</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 font-semibold block">異常次數最高：</span>
+                  <span id="aiHighestAnomalySupplier" class="text-amber-500 font-bold text-sm">計算中...</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 font-semibold block">最常見異常：</span>
+                  <span id="aiMostCommonAnomaly" class="text-slate-200 font-bold text-sm">計算中...</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 font-semibold block">高風險供應商名單：</span>
+                  <span id="aiHighRiskList" class="text-red-300 font-medium leading-relaxed block mt-1">計算中...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-slate-800 space-y-3">
+            <div class="text-xs font-bold text-slate-400">改善建議事項：</div>
+            <ul class="list-decimal list-inside text-[11px] text-slate-300 space-y-2 leading-relaxed">
+              <li><span class="text-blue-400 font-medium">提高抽檢比例：</span>針對檢驗異常頻繁或高退貨率供應商，由品保部直接拉高逐批抽樣係數。</li>
+              <li><span class="text-blue-400 font-medium">CAPA矯正改善報告：</span>針對退貨率大於 5% 且列入觀察之廠商，須提送製程矯正及預防措施報告。</li>
+              <li><span class="text-blue-400 font-medium">異常追蹤與複查：</span>本週針對最常見之主要異常類型，在現場產線上由品質QC隨機確認並追溯。</li>
+              <li><span class="text-blue-400 font-medium">替代源評估：</span>若供應商列入「高風險(分數&lt;80)」且兩週內無改善，請採購啟動新供應商樣品測試。</li>
+            </ul>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: EXPORT ACTIONS (No print) -->
+      <section class="flex flex-wrap justify-end gap-3 no-print pt-4 border-t border-slate-800">
+        <button onclick="exportToExcel()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs py-2 px-4 rounded-lg flex items-center gap-1.5 transition-colors shadow-lg shadow-emerald-950/30">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+          </svg>
+          匯出彙總 Excel
+        </button>
+        <button onclick="exportToPDF()" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs py-2 px-4 rounded-lg flex items-center gap-1.5 transition-colors shadow-lg shadow-blue-950/30">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"></path>
+          </svg>
+          匯出 PDF / 列印報表
+        </button>
+      </section>
+
+    </div>
+
+    <!-- SECTION: POC SYSTEM ARCHITECTURE (HTML+CSS Flowchart) -->
+    <section class="bg-slate-900 border border-slate-800 rounded-xl p-6 custom-shadow card-print">
+      <h3 class="text-sm font-bold text-slate-400 mb-6 flex items-center gap-1.5 no-print">
+        <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path>
+        </svg>
+        POC系統運作流程架構圖 (Data Processing Architecture Flow)
+      </h3>
+      
+      <!-- Responsive horizontal/vertical flowchart -->
+      <div class="flex flex-col md:flex-row md:flex-wrap items-center justify-center gap-3 py-4 text-xs font-semibold">
+        
+        <!-- Block 1 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-slate-800 border border-slate-700 text-blue-400 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-slate-500 mb-0.5">STEP 1</p>
+            Excel上傳
+          </div>
+          <div class="text-slate-600 text-lg hidden md:block">➔</div>
+          <div class="text-slate-600 text-center w-full md:hidden text-sm">↓</div>
+        </div>
+
+        <!-- Block 2 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-slate-800 border border-slate-700 text-blue-400 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-slate-500 mb-0.5">STEP 2</p>
+            欄位驗證
+          </div>
+          <div class="text-slate-600 text-lg hidden md:block">➔</div>
+          <div class="text-slate-600 text-center w-full md:hidden text-sm">↓</div>
+        </div>
+
+        <!-- Block 3 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-slate-800 border border-slate-700 text-blue-400 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-slate-500 mb-0.5">STEP 3</p>
+            資料品質檢查
+          </div>
+          <div class="text-slate-600 text-lg hidden md:block">➔</div>
+          <div class="text-slate-600 text-center w-full md:hidden text-sm">↓</div>
+        </div>
+
+        <!-- Block 4 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-slate-800 border border-slate-700 text-blue-400 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-slate-500 mb-0.5">STEP 4</p>
+            供應商資料彙整
+          </div>
+          <div class="text-slate-600 text-lg hidden md:block">➔</div>
+          <div class="text-slate-600 text-center w-full md:hidden text-sm">↓</div>
+        </div>
+
+        <!-- Block 5 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-slate-800 border border-slate-700 text-blue-400 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-slate-500 mb-0.5">STEP 5</p>
+            退貨率與品質分數計算
+          </div>
+          <div class="text-slate-600 text-lg hidden md:block">➔</div>
+          <div class="text-slate-600 text-center w-full md:hidden text-sm">↓</div>
+        </div>
+
+        <!-- Block 6 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-slate-800 border border-slate-700 text-blue-400 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-slate-500 mb-0.5">STEP 6</p>
+            Dashboard分析
+          </div>
+          <div class="text-slate-600 text-lg hidden md:block">➔</div>
+          <div class="text-slate-600 text-center w-full md:hidden text-sm">↓</div>
+        </div>
+
+        <!-- Block 7 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-slate-800 border border-slate-700 text-blue-400 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-slate-500 mb-0.5">STEP 7</p>
+            AI分析建議
+          </div>
+          <div class="text-slate-600 text-lg hidden md:block">➔</div>
+          <div class="text-slate-600 text-center w-full md:hidden text-sm">↓</div>
+        </div>
+
+        <!-- Block 8 -->
+        <div class="flex items-center gap-3 w-full md:w-auto">
+          <div class="flex-1 md:flex-initial bg-gradient-to-r from-blue-700 to-emerald-700 text-white border border-blue-600 px-4 py-3 rounded-lg text-center custom-shadow min-w-[120px]">
+            <p class="text-[10px] text-blue-200 mb-0.5">STEP 8</p>
+            管理決策
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="bg-slate-950 border-t border-slate-900 py-6 px-4 text-center text-xs text-slate-500 no-print">
+    <div class="max-w-7xl mx-auto flex flex-col sm:flex-row justify-between items-center gap-4">
+      <p>© 2026 食品安全品質中心. 保留所有權利。</p>
+      <p>技術支援及架構：SheetJS, Chart.js, TailwindCSS POC Prototype</p>
+    </div>
+  </footer>
+
+  <!-- MODAL: SUPPLIER REPORT CARD (供應商成績單) -->
+  <div id="reportCardModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center z-50 p-4 no-print">
+    <div class="bg-slate-900 border border-slate-800 rounded-2xl max-w-lg w-full p-6 custom-shadow space-y-6 relative animate-in fade-in zoom-in-95 duration-200">
+      <!-- Close Button -->
+      <button onclick="closeReportCardModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white bg-slate-800/80 hover:bg-slate-700 p-2 rounded-lg transition-colors">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+        </svg>
+      </button>
+
+      <!-- Header -->
+      <div class="border-b border-slate-800 pb-4">
+        <span id="modalRiskBadge" class="text-xs font-bold px-2.5 py-1 rounded">-</span>
+        <h2 id="modalSupplierName" class="text-xl font-bold text-white mt-2">-</h2>
+        <p class="text-xs text-slate-400 mt-1">晨會品質績效成績單 (POC Supplier Scorecard)</p>
+      </div>
+
+      <!-- Stats Grid -->
+      <div class="grid grid-cols-2 gap-4">
+        <div class="bg-slate-950/40 p-3 rounded-lg border border-slate-800">
+          <span class="text-[11px] text-slate-400 block">綜合品質分數</span>
+          <span id="modalScore" class="text-2xl font-black text-emerald-400">-</span>
+        </div>
+        <div class="bg-slate-950/40 p-3 rounded-lg border border-slate-800">
+          <span class="text-[11px] text-slate-400 block">退貨率 (總退貨/總進貨)</span>
+          <span id="modalReturnRate" class="text-2xl font-black text-blue-400">-</span>
+        </div>
+        <div class="bg-slate-950/40 p-3 rounded-lg border border-slate-800">
+          <span class="text-[11px] text-slate-400 block">品質異常事件數</span>
+          <span id="modalAnomalyCount" class="text-2xl font-black text-amber-500">-</span>
+        </div>
+        <div class="bg-slate-950/40 p-3 rounded-lg border border-slate-800">
+          <span class="text-[11px] text-slate-400 block">主要異常類型</span>
+          <span id="modalPrimaryAnomaly" class="text-base font-bold text-slate-300">-</span>
+        </div>
+      </div>
+
+      <!-- Improvement Suggestion Box -->
+      <div class="bg-slate-950/80 rounded-xl p-4 border border-slate-800 space-y-2">
+        <p class="text-xs font-bold text-blue-400 flex items-center gap-1">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+          </svg>
+          專屬品管改善建議 (QC Action Plan)
+        </p>
+        <p id="modalManagementAdvice" class="text-xs text-slate-300 leading-relaxed">
+          載入中...
+        </p>
+      </div>
+
+      <!-- Footer buttons -->
+      <div class="flex justify-end gap-3 pt-2">
+        <button onclick="closeReportCardModal()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold py-2 px-4 rounded-lg transition-colors">
+          關閉視窗
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JAVASCRIPT LOGIC -->
+  <script>
+    // Global Parameters & Configurable Weights (As requested)
+    const weightReturnRate = 1.5;
+    const weightAnomalyCount = 0.5;
+
+    // Application State
+    let rawData = [];
+    let aggregatedSuppliers = [];
+    let originalColumns = [];
+    
+    // Table State
+    let tableFilter = 'ALL';
+    let tableSearch = '';
+    let tableSortField = 'rank';
+    let tableSortAsc = true;
+    let tableCurrentPage = 1;
+    const tablePageSize = 10;
+
+    // Chart Instances
+    let rankingChartInstance = null;
+    let anomalyChartInstance = null;
+
+    // HTML Elements Cache
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('fileInput');
+    const globalStatusTag = document.getElementById('globalStatusTag');
+    
+    const uploadPromptView = document.getElementById('uploadPromptView');
+    const uploadErrorView = document.getElementById('uploadErrorView');
+    const validationErrorView = document.getElementById('validationErrorView');
+    const uploadSuccessView = document.getElementById('uploadSuccessView');
+    const validationErrorMessage = document.getElementById('validationErrorMessage');
+
+    const qualityAlertSection = document.getElementById('qualityAlertSection');
+    const qualityErrorCount = document.getElementById('qualityErrorCount');
+    const qualityErrorList = document.getElementById('qualityErrorList');
+    
+    const dashboardPlaceholder = document.getElementById('dashboardPlaceholder');
+    const analysisDashboard = document.getElementById('analysisDashboard');
+
+    // Drag & Drop event bindings
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.classList.add('border-blue-500', 'bg-slate-900/90');
+    });
+
+    dropzone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('border-blue-500', 'bg-slate-900/90');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.classList.remove('border-blue-500', 'bg-slate-900/90');
+      if (e.dataTransfer.files.length > 0) {
+        handleFile(e.dataTransfer.files[0]);
+      }
+    });
+
+    dropzone.addEventListener('click', () => {
+      fileInput.click();
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files.length > 0) {
+        handleFile(e.target.files[0]);
+      }
+    });
+
+    // File Preprocessing & Validation Logic
+    function handleFile(file) {
+      // Reset visual state
+      hideAllUploadViews();
+      qualityAlertSection.classList.add('hidden');
+      dashboardPlaceholder.classList.remove('hidden');
+      analysisDashboard.classList.add('hidden');
+
+      const fileName = file.name;
+      const extension = fileName.slice(((fileName.lastIndexOf(".") - 1) >>> 0) + 2).toLowerCase();
+
+      // Strict File Extension Check (.xlsx, .xls only)
+      if (extension !== 'xlsx' && extension !== 'xls') {
+        showFileTypeError();
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        try {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          
+          // Read raw data
+          const jsonRows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+          if (!jsonRows || jsonRows.length === 0) {
+            showValidationErrorMsg('檔案內容為空');
+            return;
+          }
+
+          // 1. Strict Excel Header Verification
+          const firstRow = jsonRows[0].map(cell => String(cell || '').trim());
+          // 固定欄位驗證：前四欄必須完全相同；異常欄位支援課程檔案常見命名「異常類型」或「異常次數」
+          // 注意：ING-007_POC版.xlsx 的欄位是「異常次數」，但內容其實是異常類型文字，例如：有異物、標示NG、封口不良。
+          const requiredColumns = ['供應商', '食材', '進貨次數', '退貨次數'];
+          const missingColumns = requiredColumns.filter(col => !firstRow.includes(col));
+          const anomalyColumnName = firstRow.includes('異常類型') ? '異常類型' : (firstRow.includes('異常次數') ? '異常次數' : null);
+
+          if (missingColumns.length > 0 || !anomalyColumnName) {
+            const missing = [...missingColumns];
+            if (!anomalyColumnName) missing.push('異常類型 或 異常次數');
+            showValidationErrorMsg(missing);
+            return;
+          }
+
+          // Formally success validation
+          showValidationSuccessView();
+
+          // Map header row column indices
+          const colIdx = {
+            supplier: firstRow.indexOf('供應商'),
+            material: firstRow.indexOf('食材'),
+            shipments: firstRow.indexOf('進貨次數'),
+            returns: firstRow.indexOf('退貨次數'),
+            anomaly: firstRow.indexOf(anomalyColumnName)
+          };
+
+          // Map rows & 2. Data Quality Checks
+          const parsedRows = [];
+          const qualityIssues = [];
+          const rowHistoryMap = new Set();
+
+          for (let i = 1; i < jsonRows.length; i++) {
+            const row = jsonRows[i];
+            if (!row || row.length === 0 || row.every(val => val === null || val === undefined || String(val).trim() === '')) {
+              continue; // Skip complete empty rows
+            }
+
+            const supplierRaw = row[colIdx.supplier];
+            const materialRaw = row[colIdx.material];
+            const shipmentsRaw = row[colIdx.shipments];
+            const returnsRaw = row[colIdx.returns];
+            const anomalyRaw = row[colIdx.anomaly];
+
+            const supplier = supplierRaw !== undefined && supplierRaw !== null ? String(supplierRaw).trim() : '';
+            const material = materialRaw !== undefined && materialRaw !== null ? String(materialRaw).trim() : '';
+            const anomalyType = anomalyRaw !== undefined && anomalyRaw !== null ? String(anomalyRaw).trim() : '';
+            
+            const shipments = Number(shipmentsRaw);
+            const returns = Number(returnsRaw);
+
+            let rowIssues = [];
+
+            // Check 1: 供應商空白
+            if (supplier === '') {
+              rowIssues.push('供應商名稱空白');
+            }
+            // Check 2: 食材空白
+            if (material === '') {
+              rowIssues.push('食材種類空白');
+            }
+            // Check 3: 異常類型空白
+            if (anomalyType === '') {
+              rowIssues.push('異常類型空白 (請寫"無"或特定異常)');
+            }
+            // Check 4 & 5: 進貨次數為0或小於0
+            if (isNaN(shipmentsRaw) || shipmentsRaw === null || shipmentsRaw === undefined) {
+              rowIssues.push('進貨次數非有效數值');
+            } else if (shipments === 0) {
+              rowIssues.push('進貨次數為0');
+            } else if (shipments < 0) {
+              rowIssues.push('進貨次數小於0');
+            }
+            // Check 6: 退貨次數小於0
+            if (isNaN(returnsRaw) || returnsRaw === null || returnsRaw === undefined) {
+              rowIssues.push('退貨次數非有效數值');
+            } else if (returns < 0) {
+              rowIssues.push('退貨次數小於0');
+            }
+            // Check 7: 退貨次數大於進貨次數
+            if (!isNaN(shipments) && !isNaN(returns) && returns > shipments) {
+              rowIssues.push('退貨次數大於進貨次數');
+            }
+            // Check 8: 重複資料
+            const rowStrRepresentation = JSON.stringify([supplier, material, shipmentsRaw, returnsRaw, anomalyType]);
+            if (rowHistoryMap.has(rowStrRepresentation)) {
+              rowIssues.push('重複資料列');
+            } else {
+              rowHistoryMap.add(rowStrRepresentation);
+            }
+
+            if (rowIssues.length > 0) {
+              qualityIssues.push({
+                rowIndex: i + 1,
+                details: rowIssues.join(', '),
+                dataSnapshot: `[${supplier || '空白'}, ${material || '空白'}, ${shipmentsRaw ?? '無'}, ${returnsRaw ?? '無'}, ${anomalyType || '空白'}]`
+              });
+            }
+
+            parsedRows.push({
+              supplier: supplier,
+              material: material,
+              shipments: isNaN(shipments) ? 0 : shipments,
+              returns: isNaN(returns) ? 0 : returns,
+              anomalyType: anomalyType
+            });
+          }
+
+          rawData = parsedRows;
+
+          // Render Data Quality Alert Panel if any anomalies exist
+          if (qualityIssues.length > 0) {
+            renderQualityAlerts(qualityIssues);
+          } else {
+            qualityAlertSection.classList.add('hidden');
+          }
+
+          // Process Data Aggregation & Calculations
+          aggregateAndAnalyze();
+
+        } catch (err) {
+          console.error(err);
+          showValidationErrorMsg('無法讀取該 Excel 檔案，請檢查其結構是否毀損');
+        }
+      };
+      reader.readAsArrayBuffer(file);
+    }
+
+    function hideAllUploadViews() {
+      uploadPromptView.classList.add('hidden');
+      uploadErrorView.classList.add('hidden');
+      validationErrorView.classList.add('hidden');
+      uploadSuccessView.classList.add('hidden');
+    }
+
+    function showFileTypeError() {
+      uploadErrorView.classList.remove('hidden');
+      globalStatusTag.className = "text-sm font-semibold text-red-500 mt-1 flex items-center justify-end gap-1";
+      globalStatusTag.innerHTML = `🚫 檔案格式錯誤`;
+      alert("檔案格式錯誤\
+\
+本系統僅允許上傳Excel檔案\
+\
+支援格式：\
+.xlsx\
+.xls\
+\
+請重新上傳正確檔案");
+    }
+
+    function showValidationErrorMsg(missingInfo) {
+      validationErrorView.classList.remove('hidden');
+      let text = '';
+      if (Array.isArray(missingInfo)) {
+        text = `缺少必要欄位：${missingInfo.join('、')}`;
+      } else {
+        text = missingInfo;
+      }
+      validationErrorMessage.textContent = text;
+      globalStatusTag.className = "text-sm font-semibold text-red-500 mt-1 flex items-center justify-end gap-1";
+      globalStatusTag.innerHTML = `🚫 格式欄位驗證不符`;
+    }
+
+    function showValidationSuccessView() {
+      uploadSuccessView.classList.remove('hidden');
+      globalStatusTag.className = "text-sm font-semibold text-emerald-500 mt-1 flex items-center justify-end gap-1";
+      globalStatusTag.innerHTML = `✅ 資料已成功載入`;
+    }
+
+    function renderQualityAlerts(issues) {
+      qualityErrorCount.textContent = issues.length;
+      qualityErrorList.innerHTML = '';
+      issues.forEach(issue => {
+        const li = document.createElement('li');
+        li.innerHTML = `第 <span class="font-bold text-red-400">${issue.rowIndex}</span> 列資料：<span class="text-amber-400 font-semibold">${issue.details}</span> <span class="text-slate-500 font-mono text-[10px]">${issue.dataSnapshot}</span>`;
+        qualityErrorList.appendChild(li);
+      });
+      qualityAlertSection.classList.remove('hidden');
+    }
+
+    // 3. Data Processing & Analytical Logic (Group By Supplier)
+    function aggregateAndAnalyze() {
+      const supplierGroups = {};
+
+      rawData.forEach(row => {
+        const name = row.supplier;
+        if (!name) return; // Skip blank supplier names
+
+        if (!supplierGroups[name]) {
+          supplierGroups[name] = {
+            name: name,
+            shipments: 0,
+            returns: 0,
+            anomalyCount: 0,
+            anomaliesMap: {},
+            foodTypes: new Set()
+          };
+        }
+
+        const s = supplierGroups[name];
+        s.shipments += row.shipments;
+        s.returns += row.returns;
+        s.foodTypes.add(row.material);
+
+        // Anomaly assessment: empty, '無', or '正常' are NOT treated as quality failures
+        const aType = row.anomalyType;
+        if (aType && aType !== '無' && aType !== '正常') {
+          s.anomalyCount += 1;
+          s.anomaliesMap[aType] = (s.anomaliesMap[aType] || 0) + 1;
+        }
+      });
+
+      // Map aggregated list and calculate dynamic KPIs
+      aggregatedSuppliers = Object.values(supplierGroups).map(s => {
+        const returnRate = s.shipments > 0 ? (s.returns / s.shipments) * 100 : 0;
+        
+        // Determine Primary Anomaly Type
+        let primaryAnomaly = '無';
+        let maxCount = 0;
+        for (const [type, cnt] of Object.entries(s.anomaliesMap)) {
+          if (cnt > maxCount) {
+            maxCount = cnt;
+            primaryAnomaly = type;
+          }
+        }
+
+        // Formula: score = 100 - (returnRate * 1.5) - (anomalyCount * 0.5)
+        let score = 100 - (returnRate * weightReturnRate) - (s.anomalyCount * weightAnomalyCount);
+        if (score < 0) score = 0;
+        if (score > 100) score = 100;
+
+        let riskLevel = '優良';
+        if (score < 80) {
+          riskLevel = '高風險';
+        } else if (score < 90) {
+          riskLevel = '觀察';
+        }
+
+        return {
+          name: s.name,
+          shipments: s.shipments,
+          returns: s.returns,
+          returnRate: returnRate,
+          anomalyCount: s.anomalyCount,
+          primaryAnomaly: primaryAnomaly,
+          anomaliesMap: s.anomaliesMap,
+          score: score,
+          riskLevel: riskLevel
+        };
+      });
+
+      // Update KPI panels, dropdowns, table, and charts
+      updateKPICards();
+      populateAnomalySupplierSelect();
+      
+      // Build default view sorted by score descending
+      sortTableByField('score', true);
+      
+      refreshCharts();
+      renderAIAnalysisSection();
+
+      // Switch visual mode
+      dashboardPlaceholder.classList.add('hidden');
+      analysisDashboard.classList.remove('hidden');
+    }
+
+    // KPI Render Engine
+    function updateKPICards() {
+      const numSuppliers = aggregatedSuppliers.length;
+      const rawRecords = rawData.length;
+      
+      let totalShipments = 0;
+      let totalReturns = 0;
+      let sumScores = 0;
+      let highRiskCount = 0;
+      let totalAnomalyCount = 0;
+
+      aggregatedSuppliers.forEach(s => {
+        totalShipments += s.shipments;
+        totalReturns += s.returns;
+        sumScores += s.score;
+        totalAnomalyCount += s.anomalyCount;
+        if (s.score < 80) {
+          highRiskCount++;
+        }
+      });
+
+      const avgReturnRate = totalShipments > 0 ? (totalReturns / totalShipments) * 100 : 0;
+      const avgQualityScore = numSuppliers > 0 ? sumScores / numSuppliers : 0;
+
+      document.getElementById('kpi_suppliers_count').textContent = numSuppliers;
+      document.getElementById('kpi_raw_records').textContent = rawRecords;
+      document.getElementById('kpi_total_shipments').textContent = totalShipments;
+      document.getElementById('kpi_total_returns').textContent = totalReturns;
+      document.getElementById('kpi_avg_return_rate').textContent = avgReturnRate.toFixed(2) + '%';
+      document.getElementById('kpi_avg_quality_score').textContent = avgQualityScore.toFixed(1);
+      document.getElementById('kpi_high_risk_count').textContent = highRiskCount;
+      document.getElementById('kpi_anomaly_events_count').textContent = totalAnomalyCount;
+    }
+
+    // Dropdown options populate for anomaly chart
+    function populateAnomalySupplierSelect() {
+      const select = document.getElementById('anomalySupplierSelect');
+      // Clear current except ALL
+      select.innerHTML = '<option value="ALL">全部供應商</option>';
+      aggregatedSuppliers.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.name;
+        opt.textContent = s.name;
+        select.appendChild(opt);
+      });
+    }
+
+    // Horizontal Ranking Bar Chart Render
+    function renderRankingChart() {
+      const canvasCtx = document.getElementById('rankingChart').getContext('2d');
+      const metric = document.getElementById('rankingMetricSelect').value;
+      
+      // Sorter Logic based on dropdown value
+      const sorted = [...aggregatedSuppliers].sort((a, b) => {
+        return b[metric] - a[metric];
+      });
+
+      // Construct labels with Rank Medal emojis
+      const labels = sorted.map((s, idx) => {
+        let medal = '';
+        if (idx === 0) medal = '🥇 ';
+        else if (idx === 1) medal = '🥈 ';
+        else if (idx === 2) medal = '🥉 ';
+        return `${medal}${s.name}`;
+      });
+
+      const values = sorted.map(s => {
+        if (metric === 'returnRate') return s.returnRate.toFixed(2);
+        if (metric === 'score') return s.score.toFixed(1);
+        return s[metric];
+      });
+
+      let labelText = '';
+      let barColor = '#3B82F6';
+      
+      if (metric === 'score') {
+        labelText = '品質分數 (0-100)';
+        barColor = '#10B981';
+      } else if (metric === 'returnRate') {
+        labelText = '退貨率 (%)';
+        barColor = '#EF4444';
+      } else if (metric === 'returns') {
+        labelText = '總退貨次數';
+        barColor = '#F59E0B';
+      } else if (metric === 'anomalyCount') {
+        labelText = '品質異常次數';
+        barColor = '#F59E0B';
+      } else if (metric === 'shipments') {
+        labelText = '總進貨次數';
+        barColor = '#3B82F6';
+      }
+
+      // Update print title label
+      document.getElementById('rankingPrintTitle').textContent = `供應商：${labelText} 排名分佈表`;
+
+      if (rankingChartInstance) {
+        rankingChartInstance.destroy();
+      }
+
+      rankingChartInstance = new Chart(canvasCtx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: labelText,
+            data: values,
+            backgroundColor: barColor,
+            borderRadius: 4,
+            borderWidth: 0
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              labels: { color: '#94A3B8', font: { family: 'Noto Sans TC' } }
+            },
+            tooltip: {
+              titleFont: { family: 'Noto Sans TC' },
+              bodyFont: { family: 'Noto Sans TC' }
+            }
+          },
+          scales: {
+            x: {
+              grid: { color: '#334155' },
+              ticks: { color: '#94A3B8', font: { family: 'Noto Sans TC' } }
+            },
+            y: {
+              grid: { display: false },
+              ticks: { color: '#94A3B8', font: { family: 'Noto Sans TC' } }
+            }
+          }
+        }
+      });
+    }
+
+    // Anomaly Pie/Doughnut Chart Render
+    function renderAnomalyChart() {
+      const canvasCtx = document.getElementById('anomalyChart').getContext('2d');
+      const selection = document.getElementById('anomalySupplierSelect').value;
+
+      // Defined anomaly categories to audit
+      const categories = ['異物', '標示NG', '封口不良', '重量不足', '溫度偏高', '包裝破損', '顏色異常', '變色', '其他'];
+      const counts = Array(categories.length).fill(0);
+
+      if (selection === 'ALL') {
+        // Aggregate across all records
+        rawData.forEach(row => {
+          const aType = row.anomalyType;
+          if (aType && aType !== '無' && aType !== '正常') {
+            const idx = categories.indexOf(aType);
+            if (idx !== -1) {
+              counts[idx]++;
+            } else {
+              counts[categories.indexOf('其他')]++;
+            }
+          }
+        });
+        document.getElementById('anomalyPrintTitle').textContent = `進貨品質異常類型分佈：全廠供應商總計`;
+      } else {
+        // Filter to specific selected supplier
+        const found = aggregatedSuppliers.find(s => s.name === selection);
+        if (found) {
+          categories.forEach((cat, idx) => {
+            counts[idx] = found.anomaliesMap[cat] || 0;
+          });
+          // Any other anomalous names not matched explicitly in standard list
+          for (const [key, val] of Object.entries(found.anomaliesMap)) {
+            if (!categories.includes(key)) {
+              counts[categories.indexOf('其他')] += val;
+            }
+          }
+        }
+        document.getElementById('anomalyPrintTitle').textContent = `進貨品質異常類型分佈：${selection}`;
+      }
+
+      const totalAnomalyEvents = counts.reduce((a, b) => a + b, 0);
+
+      if (anomalyChartInstance) {
+        anomalyChartInstance.destroy();
+      }
+
+      if (totalAnomalyEvents === 0) {
+        // No anomalies found fallback rendering custom graphics
+        anomalyChartInstance = new Chart(canvasCtx, {
+          type: 'doughnut',
+          data: {
+            labels: ['尚無異常數據'],
+            datasets: [{
+              data: [1],
+              backgroundColor: ['#334155']
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+              legend: {
+                labels: { color: '#94A3B8', font: { family: 'Noto Sans TC' } }
+              }
+            }
+          }
+        });
+        return;
+      }
+
+      anomalyChartInstance = new Chart(canvasCtx, {
+        type: 'doughnut',
+        data: {
+          labels: categories,
+          datasets: [{
+            data: counts,
+            backgroundColor: [
+              '#EF4444', // 異物 (Red)
+              '#F59E0B', // 標示NG (Amber)
+              '#3B82F6', // 封口不良 (Blue)
+              '#10B981', // 重量不足 (Emerald)
+              '#6366F1', // 溫度偏高 (Indigo)
+              '#EC4899', // 包裝破損 (Pink)
+              '#8B5CF6', // 顏色異常 (Purple)
+              '#14B8A6', // 變色 (Teal)
+              '#64748B'  // 其他 (Slate)
+            ],
+            borderWidth: 1,
+            borderColor: '#0F172A'
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'right',
+              labels: {
+                color: '#94A3B8',
+                font: { family: 'Noto Sans TC', size: 10 }
+              }
+            },
+            tooltip: {
+              titleFont: { family: 'Noto Sans TC' },
+              bodyFont: { family: 'Noto Sans TC' }
+            }
+          }
+        }
+      });
+    }
+
+    function refreshCharts() {
+      renderRankingChart();
+      renderAnomalyChart();
+    }
+
+    // Bind chart control change events
+    document.getElementById('rankingMetricSelect').addEventListener('change', renderRankingChart);
+    document.getElementById('anomalySupplierSelect').addEventListener('change', renderAnomalyChart);
+
+    // Supplier Table Management (Search, Sort, Pagination, Risk Lights)
+    function sortTableByField(field, skipToggle = false) {
+      if (!skipToggle) {
+        if (tableSortField === field) {
+          tableSortAsc = !tableSortAsc;
+        } else {
+          tableSortField = field;
+          tableSortAsc = true;
+        }
+      }
+      renderTable();
+    }
+
+    function renderTable() {
+      const tbody = document.getElementById('supplierTableBody');
+      tbody.innerHTML = '';
+
+      // 1. Process Filtering
+      let processed = [...aggregatedSuppliers];
+
+      // Search Match
+      if (tableSearch) {
+        processed = processed.filter(s => s.name.toLowerCase().includes(tableSearch.toLowerCase()));
+      }
+
+      // Risk Filter Match
+      if (tableFilter !== 'ALL') {
+        processed = processed.filter(s => s.riskLevel === tableFilter);
+      }
+
+      // Assign baseline Ranks (Sort by score descending as master rank)
+      const masterRanked = [...aggregatedSuppliers].sort((a, b) => b.score - a.score);
+      processed.forEach(s => {
+        s.rank = masterRanked.findIndex(m => m.name === s.name) + 1;
+      });
+
+      // 2. Process Sorting
+      processed.sort((a, b) => {
+        let valA = a[tableSortField];
+        let valB = b[tableSortField];
+
+        if (typeof valA === 'string') {
+          return tableSortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+        } else {
+          return tableSortAsc ? valA - valB : valB - valA;
+        }
+      });
+
+      // 3. Process Pagination
+      const totalRecords = processed.length;
+      const maxPages = Math.ceil(totalRecords / tablePageSize) || 1;
+      if (tableCurrentPage > maxPages) tableCurrentPage = maxPages;
+
+      const startIdx = (tableCurrentPage - 1) * tablePageSize;
+      const endIdx = Math.min(startIdx + tablePageSize, totalRecords);
+
+      const paginatedRecords = processed.slice(startIdx, endIdx);
+
+      // Update pagination indicators
+      document.getElementById('paginationStartIdx').textContent = totalRecords === 0 ? 0 : startIdx + 1;
+      document.getElementById('paginationEndIdx').textContent = endIdx;
+      document.getElementById('paginationTotalCount').textContent = totalRecords;
+      
+      document.getElementById('btnPrevPage').disabled = tableCurrentPage === 1;
+      document.getElementById('btnNextPage').disabled = tableCurrentPage === maxPages;
+
+      if (paginatedRecords.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="10" class="py-8 text-center text-slate-500 text-xs">無符合條件的供應商資料</td></tr>`;
+        return;
+      }
+
+      // Render row contents
+      paginatedRecords.forEach(s => {
+        let light = '🟢 優良';
+        let lightColor = 'text-emerald-400';
+        if (s.riskLevel === '高風險') {
+          light = '🔴 高風險';
+          lightColor = 'text-red-400';
+        } else if (s.riskLevel === '觀察') {
+          light = '🟡 觀察';
+          lightColor = 'text-amber-400';
+        }
+
+        // Custom suggestions engine
+        let advice = '維持現有合作';
+        if (s.score < 80) {
+          advice = '列入供應商輔導或替代供應商評估';
+        } else if (s.returnRate > 5.0) {
+          advice = '提高抽檢比例';
+        } else if (s.anomalyCount > 3) {
+          advice = '要求供應商提出改善報告';
+        }
+
+        const tr = document.createElement('tr');
+        tr.className = 'hover:bg-slate-800/60 transition-colors cursor-pointer';
+        tr.onclick = () => openReportCardModal(s);
+        
+        tr.innerHTML = `
+          <td class="py-3.5 px-4 font-bold text-slate-400">${s.rank}</td>
+          <td class="py-3.5 px-4 ${lightColor} font-bold text-xs">${light}</td>
+          <td class="py-3.5 px-4 font-bold text-white">${s.name}</td>
+          <td class="py-3.5 px-4 font-mono">${s.shipments}</td>
+          <td class="py-3.5 px-4 font-mono">${s.returns}</td>
+          <td class="py-3.5 px-4 font-mono">${s.returnRate.toFixed(2)}%</td>
+          <td class="py-3.5 px-4 font-mono text-amber-500 font-semibold">${s.anomalyCount}</td>
+          <td class="py-3.5 px-4 text-xs text-slate-400">${s.primaryAnomaly}</td>
+          <td class="py-3.5 px-4 font-mono font-bold text-right text-emerald-400 text-sm">${s.score.toFixed(1)}</td>
+          <td class="py-3.5 px-4 text-xs text-blue-400 no-print font-medium">${advice}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    // Table Interactive Bindings
+    document.getElementById('tableSearchInput').addEventListener('input', (e) => {
+      tableSearch = e.target.value;
+      tableCurrentPage = 1;
+      renderTable();
+    });
+
+    document.getElementById('tableRiskFilter').addEventListener('change', (e) => {
+      tableFilter = e.target.value;
+      tableCurrentPage = 1;
+      renderTable();
+    });
+
+    function prevTablePage() {
+      if (tableCurrentPage > 1) {
+        tableCurrentPage--;
+        renderTable();
+      }
+    }
+
+    function nextTablePage() {
+      const maxPages = Math.ceil(aggregatedSuppliers.length / tablePageSize);
+      if (tableCurrentPage < maxPages) {
+        tableCurrentPage++;
+        renderTable();
+      }
+    }
+
+    // Supplier Scorecard Detailed Modal Viewer (成績單)
+    function openReportCardModal(supplier) {
+      const modal = document.getElementById('reportCardModal');
+      document.getElementById('modalSupplierName').textContent = supplier.name;
+      document.getElementById('modalScore').textContent = supplier.score.toFixed(1) + ' 分';
+      document.getElementById('modalReturnRate').textContent = supplier.returnRate.toFixed(2) + '%';
+      document.getElementById('modalAnomalyCount').textContent = supplier.anomalyCount + ' 次';
+      document.getElementById('modalPrimaryAnomaly').textContent = supplier.primaryAnomaly;
+
+      const badge = document.getElementById('modalRiskBadge');
+      badge.textContent = supplier.riskLevel;
+
+      let adviceText = '';
+      if (supplier.score >= 90) {
+        badge.className = 'text-xs font-bold px-2.5 py-1 rounded bg-emerald-950/80 text-emerald-400';
+        adviceText = `【維持現有合作關係】此供應商之進貨品質指標非常優異。品管處建議維持當前之標準抽檢流程（一般檢驗水準-II級），並將其優秀績效登錄於年度優質商名冊，優先於新採購案中提列。`;
+      } else if (supplier.score >= 80) {
+        badge.className = 'text-xs font-bold px-2.5 py-1 rounded bg-amber-950/80 text-amber-400';
+        adviceText = `【進行品質輔導與觀察】目前分數介於觀察區間。主要異常特徵為 [ ${supplier.primaryAnomaly} ]。建議採購與品保團隊密切注意其後續進料品質，並促請供應商分析此類異常發生之原因；現場抽查可適度提升 10% 樣品抽核率以防止微小異物或瑕疵流入產線。`;
+      } else {
+        badge.className = 'text-xs font-bold px-2.5 py-1 rounded bg-red-950/80 text-red-400';
+        adviceText = `【高風險管制及限期改善】該供應商綜合指標已跌破警戒水位！主要原因為退貨率高達 ${supplier.returnRate.toFixed(1)}% 或重大異常頻繁。品管處強烈建議即刻啟動「高風險廠商管制機制」：1. 升級為「加嚴檢驗」；2. 發出CAPA改正要求書，限期供應商於兩週內提交根本原因分析及改善防範規劃；3. 同步協調採購部門進行二線替代備份供應商的樣品測試與備貨機制。`;
+      }
+
+      document.getElementById('modalManagementAdvice').textContent = adviceText;
+      modal.classList.remove('hidden');
+    }
+
+    function closeReportCardModal() {
+      document.getElementById('reportCardModal').classList.add('hidden');
+    }
+
+    // Real-Time Rule-Based AI Analytical Engine
+    function renderAIAnalysisSection() {
+      if (aggregatedSuppliers.length === 0) return;
+
+      // Sorted lists for AI discovery
+      const sortedByRisk = [...aggregatedSuppliers].sort((a, b) => a.score - b.score);
+      const sortedByReturnRate = [...aggregatedSuppliers].sort((a, b) => b.returnRate - a.returnRate);
+      const sortedByAnomaly = [...aggregatedSuppliers].sort((a, b) => b.anomalyCount - a.anomalyCount);
+
+      // Discover most common overall anomaly type
+      const globalAnomaliesMap = {};
+      rawData.forEach(row => {
+        const aType = row.anomalyType;
+        if (aType && aType !== '無' && aType !== '正常') {
+          globalAnomaliesMap[aType] = (globalAnomaliesMap[aType] || 0) + 1;
+        }
+      });
+      
+      let mostCommonAnomaly = '無明顯異常紀錄';
+      let maxCount = 0;
+      for (const [type, count] of Object.entries(globalAnomaliesMap)) {
+        if (count > maxCount) {
+          maxCount = count;
+          mostCommonAnomaly = `${type} (${count}件)`;
+        }
+      }
+
+      const highRiskList = aggregatedSuppliers.filter(s => s.score < 80).map(s => s.name);
+      const highRiskText = highRiskList.length > 0 ? highRiskList.join('、') : '目前無高風險供應商';
+
+      // Populate AI text fields dynamically (Strictly based on Excel input, no hardcoded text)
+      document.getElementById('aiHighestRiskSupplier').textContent = `${sortedByRisk[0].name} (分數: ${sortedByRisk[0].score.toFixed(1)}分)`;
+      document.getElementById('aiHighestReturnRateSupplier').textContent = `${sortedByReturnRate[0].name} (退貨率: ${sortedByReturnRate[0].returnRate.toFixed(2)}%)`;
+      document.getElementById('aiHighestAnomalySupplier').textContent = `${sortedByAnomaly[0].name} (異常: ${sortedByAnomaly[0].anomalyCount}次)`;
+      document.getElementById('aiMostCommonAnomaly').textContent = mostCommonAnomaly;
+      document.getElementById('aiHighRiskList').textContent = highRiskText;
+    }
+
+    // Export features
+    function exportToExcel() {
+      if (aggregatedSuppliers.length === 0) {
+        alert('無可供匯出的資料');
+        return;
+      }
+
+      const header = ['排名', '風險燈號', '供應商名稱', '總進貨次數', '總退貨次數', '退貨率(%)', '異常次數', '主要異常類型', '綜合品質分數'];
+      
+      // Sort by score descending
+      const sorted = [...aggregatedSuppliers].sort((a, b) => b.score - a.score);
+      const rows = sorted.map((s, index) => [
+        index + 1,
+        s.riskLevel,
+        s.name,
+        s.shipments,
+        s.returns,
+        Number(s.returnRate.toFixed(2)),
+        s.anomalyCount,
+        s.primaryAnomaly,
+        Number(s.score.toFixed(1))
+      ]);
+
+      const worksheetData = [header, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(worksheetData);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "供應商品質彙總");
+      
+      XLSX.writeFile(wb, "供應商進貨品質評分彙總報表.xlsx");
+    }
+
+    function exportToPDF() {
+      // Trigger standard print mode optimized beautifully with print media CSS
+      window.print();
+    }
+  </script>
+</body>
+</html>
