@@ -1,0 +1,15 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* App 用到的非標準 utility，補上避免樣式掉漆 */
+@layer utilities {
+  .text-2xs { font-size: 0.6875rem; line-height: 1rem; }
+  .text-3xs { font-size: 0.625rem; line-height: 0.875rem; }
+  .shadow-2xs { box-shadow: 0 1px 1px 0 rgb(0 0 0 / 0.04); }
+  .shadow-3xs { box-shadow: 0 1px 1px 0 rgb(0 0 0 / 0.02); }
+  .glow-orange { box-shadow: 0 0 24px -4px rgba(249, 115, 22, 0.5); }
+}
+
+.font-display { font-family: inherit; }
+.markdown-body { line-height: 1.6; }
